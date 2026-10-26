@@ -7,7 +7,23 @@
 *{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
 font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden}
 body.night{filter:brightness(.45) sepia(.3)}
-#app{display:grid;grid-template-columns:47fr 23fr 30fr;gap:0.75rem;height:100vh;padding:0.75rem}
+body{background-size:cover;background-position:center}
+#app{position:relative;height:100vh}
+.panel.tile{position:absolute;background:rgba(43,36,30,.88);backdrop-filter:blur(4px)}
+.tile.hid{display:none}
+body.editing .tile{outline:.2rem dashed var(--accent);touch-action:none;cursor:move}
+body.editing .tile>*:not(.ctl){pointer-events:none}
+.ctl{display:none}body.editing .ctl{display:block}
+.ctl.hide{position:absolute;top:.4rem;right:.4rem;font-size:1.1rem;padding:.4rem .8rem;z-index:3}
+.ctl.rs{position:absolute;right:0;bottom:0;width:3rem;height:3rem;font-size:2rem;line-height:3rem;text-align:center;color:var(--accent);cursor:nwse-resize;z-index:3;background:rgba(0,0,0,.4);border-radius:.8rem 0 1rem 0}
+#bar{position:fixed;left:.9rem;bottom:.9rem;display:flex;gap:.4rem;z-index:6;opacity:.35}#bar:hover,body.editing #bar{opacity:1}
+button,.filebtn{font-size:1.1rem;background:var(--line);color:var(--text);border:0;border-radius:.6rem;padding:.45rem .9rem;cursor:pointer;font-family:inherit}
+button.primary{background:var(--accent);color:#1a1410;font-weight:800}
+#editPanel{display:none;position:fixed;left:50%;bottom:.9rem;transform:translateX(-50%);z-index:7;background:#2b241e;border:.15rem solid var(--accent);border-radius:1rem;padding:.8rem 1rem;width:min(92vw,60rem);font-size:1.1rem;box-shadow:0 .5rem 2rem #000a}
+body.editing #editPanel{display:block}
+#editPanel .row{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin:.35rem 0}
+#editPanel .hint{color:var(--dim)}#editPanel input:not([type=file]){flex:1;font-size:1.1rem;padding:.45rem;border-radius:.5rem;border:0;min-width:12rem}
+.sw{display:inline-block;vertical-align:middle;width:3.2rem;height:2.2rem;border-radius:.5rem;border:.15rem solid var(--line);cursor:pointer;background-size:cover}.sw.on{border-color:var(--accent)}
 .panel{background:var(--panel);border:0.125rem solid var(--line);border-radius:1rem;padding:0.75rem 0.875rem;overflow:hidden;display:flex;flex-direction:column;min-height:0}
 h2{margin:0 0 0.5rem;font-size:1.38rem;color:var(--accent);letter-spacing:.0.312rem}
 /* calendar */
@@ -30,7 +46,7 @@ h2{margin:0 0 0.5rem;font-size:1.38rem;color:var(--accent);letter-spacing:.0.312
 .item .tm{color:var(--dim);font-size:1.06rem;display:block}
 .past{opacity:.45}
 /* right */
-#right{display:grid;grid-template-rows:auto auto 1fr;gap:0.75rem;min-height:0}
+
 #clock{font-size:4.75rem;font-weight:800;line-height:1;letter-spacing:0.0625rem}
 #date{font-size:1.62rem;color:var(--dim);margin-top:0.25rem}
 #wx{display:flex;align-items:center;gap:0.875rem;margin-top:0.625rem;font-size:1.38rem}
@@ -46,14 +62,20 @@ h2{margin:0 0 0.5rem;font-size:1.38rem;color:var(--accent);letter-spacing:.0.312
 #msg{position:fixed;inset:0;display:none;align-items:center;justify-content:center;font-size:1.75rem;text-align:center;padding:2.5rem;background:var(--bg)}
 </style></head><body>
 <div id="app">
- <section class="panel"><div id="calHead"><h2 id="monthName"></h2><div><button id="fs" style="font-size:1.25rem">⛶ Full screen</button><button id="prev">‹</button><button id="todayBtn" style="font-size:1.25rem">Today</button><button id="nextBtn">›</button></div></div><div id="grid"></div></section>
- <section class="panel"><h2>This week</h2><div class="list" id="week"></div><h2 style="margin-top:10px">Tasks and reminders</h2><div class="list" id="tasks" style="flex:0 0 auto;max-height:32%"></div></section>
- <div id="right">
-  <section class="panel"><div id="clock"></div><div id="date"></div><div id="wx"><span id="wxI" style="font-size:2.75rem"></span><span id="wxT"></span><span id="wxD"></span></div></section>
-  <section class="panel" id="next"><h2>Next up</h2><div id="nextTitle"></div><div id="nextWhen"></div><div id="nextCd"></div><div id="nextB"></div></section>
-  <section class="panel"><h2>Coming up</h2><div class="list" id="up"></div><div id="foot"></div></section>
- </div>
-</div><div id="msg"></div>
+ <section class="panel tile" data-t="calendar" data-name="Calendar"><div id="calHead"><h2 id="monthName"></h2><div><button id="prev">‹</button><button id="todayBtn" style="font-size:1.25rem">Today</button><button id="nextBtn">›</button></div></div><div id="grid"></div></section>
+ <section class="panel tile" data-t="week" data-name="This week + tasks"><h2>This week</h2><div class="list" id="week"></div><h2 style="margin-top:.6rem">Tasks and reminders</h2><div class="list" id="tasks" style="flex:0 0 auto;max-height:32%"></div></section>
+ <section class="panel tile" data-t="clock" data-name="Clock and date"><div id="clock"></div><div id="date"></div></section>
+ <section class="panel tile" data-t="weather" data-name="Weather"><div id="wx" style="margin:0"><span id="wxI" style="font-size:2.75rem"></span><span id="wxT"></span><span id="wxD"></span></div></section>
+ <section class="panel tile" id="next" data-t="next" data-name="Next up"><h2>Next up</h2><div id="nextTitle"></div><div id="nextWhen"></div><div id="nextCd"></div><div id="nextB"></div></section>
+ <section class="panel tile" data-t="up" data-name="Coming up"><h2>Coming up</h2><div class="list" id="up"></div><div id="foot"></div></section>
+</div>
+<div id="bar"><button id="editBtn">✎ Edit layout</button><button id="fs">⛶ Full screen</button></div>
+<div id="editPanel"><div class="row"><b>Edit layout</b> <span class="hint">Drag a tile to move it. Drag the ◢ corner to resize.</span></div>
+ <div class="row"><b>Hidden tiles:</b> <span id="hiddenList"></span></div>
+ <div class="row"><b>Background:</b> <span id="bgChoices"></span></div>
+ <div class="row"><input id="bgUrl" placeholder="Paste an image link"><button id="bgUrlBtn">Use link</button><label class="filebtn">Pick a photo<input type="file" id="bgFile" accept="image/*" hidden></label></div>
+ <div class="row"><button id="resetBtn">↺ Reset layout</button><button id="doneBtn" class="primary">✓ Done</button></div></div>
+<div id="msg"></div>
 <script>
 const TZ='America/Denver';let DATA=null,viewMonth=null;
 const $=id=>document.getElementById(id);
@@ -122,6 +144,44 @@ $('nextBtn').onclick=()=>{viewMonth.m++;if(viewMonth.m>12){viewMonth.m=1;viewMon
 $('todayBtn').onclick=()=>{viewMonth=null;renderCal()};
 $('fs').onclick=()=>{const d=document;if(d.fullscreenElement||d.webkitFullscreenElement){(d.exitFullscreen||d.webkitExitFullscreen).call(d)}else{const e=d.documentElement;(e.requestFullscreen||e.webkitRequestFullscreen).call(e)}};
 document.addEventListener('fullscreenchange',()=>{$('fs').textContent=document.fullscreenElement?'✕ Exit':'⛶ Full screen'});
+
+// ---- customizable layout (per device, localStorage) ----
+const G=24,GAP=.75;
+const DEF={calendar:{x:0,y:0,w:11,h:24},week:{x:11,y:0,w:6,h:24},clock:{x:17,y:0,w:7,h:5},weather:{x:17,y:5,w:7,h:4},next:{x:17,y:9,w:7,h:8},up:{x:17,y:17,w:7,h:7}};
+let L=JSON.parse(localStorage.getItem('layout')||'null')||structuredClone(DEF);
+for(const k in DEF)L[k]??=structuredClone(DEF[k]);
+const tiles=[...document.querySelectorAll('.tile')];
+function place(){for(const t of tiles){const p=L[t.dataset.t];t.classList.toggle('hid',!!p.hidden);
+ Object.assign(t.style,{left:`calc(${p.x/G*100}% + ${GAP/2}rem)`,top:`calc(${p.y/G*100}% + ${GAP/2}rem)`,width:`calc(${p.w/G*100}% - ${GAP}rem)`,height:`calc(${p.h/G*100}% - ${GAP}rem)`})}
+ $('hiddenList').innerHTML=tiles.filter(t=>L[t.dataset.t].hidden).map(t=>`<button data-show="${t.dataset.t}">+ ${t.dataset.name}</button>`).join('')||'<span class="hint">none</span>'}
+const save=()=>localStorage.setItem('layout',JSON.stringify(L));
+for(const t of tiles){const h=document.createElement('button');h.className='ctl hide';h.textContent='✕ Hide';
+ h.onclick=e=>{e.stopPropagation();L[t.dataset.t].hidden=true;save();place()};
+ const r=document.createElement('div');r.className='ctl rs';r.textContent='◢';t.append(h,r);
+ t.addEventListener('pointerdown',e=>{if(!document.body.classList.contains('editing')||e.target===h)return;e.preventDefault();
+  const resize=e.target===r,p=L[t.dataset.t],o={...p},W=$('app').clientWidth/G,H=$('app').clientHeight/G,sx=e.clientX,sy=e.clientY;t.style.zIndex=4;
+  const mv=ev=>{const dx=Math.round((ev.clientX-sx)/W),dy=Math.round((ev.clientY-sy)/H);
+   if(resize){p.w=Math.max(3,Math.min(G-p.x,o.w+dx));p.h=Math.max(2,Math.min(G-p.y,o.h+dy))}
+   else{p.x=Math.max(0,Math.min(G-p.w,o.x+dx));p.y=Math.max(0,Math.min(G-p.h,o.y+dy))}place()};
+  const up=()=>{removeEventListener('pointermove',mv);removeEventListener('pointerup',up);removeEventListener('pointercancel',up);t.style.zIndex='';save();if(DATA)renderCal()};
+  addEventListener('pointermove',mv);addEventListener('pointerup',up);addEventListener('pointercancel',up)})}
+$('hiddenList').onclick=e=>{const k=e.target.dataset.show;if(k){L[k].hidden=false;save();place()}};
+if(location.search.includes('edit'))document.body.classList.add('editing');
+$('editBtn').onclick=()=>document.body.classList.toggle('editing');$('doneBtn').onclick=()=>document.body.classList.remove('editing');
+$('resetBtn').onclick=()=>{L=structuredClone(DEF);save();place();if(DATA)renderCal()};
+// backgrounds
+const BG={'Warm dark':'#1f1a16','Forest night':'linear-gradient(160deg,#0f2418,#1d3b2a 55%,#0b1510)','Mountain dusk':'linear-gradient(170deg,#2a2346,#5b3a55 50%,#c0714f)','Lake blue':'linear-gradient(160deg,#0c1d2e,#1c4060 60%,#0a1622)','Ember':'radial-gradient(circle at 30% 20%,#5a2e14,#1f1410 70%)','Slate':'linear-gradient(160deg,#22262b,#3a4048)'};
+function setBg(v,save1=true){document.body.style.background=v.startsWith('url(')||!v.includes('(')&&!v.startsWith('#')?v:v;
+ if(/^(https?:|data:|blob:)/.test(v))document.body.style.background=`#1f1a16 url("${v}") center/cover no-repeat`;
+ if(save1)try{localStorage.setItem('bg',v)}catch(e){alert('That picture is too big to save on this device.')}
+ [...document.querySelectorAll('.sw')].forEach(s=>s.classList.toggle('on',s.dataset.v===v))}
+$('bgChoices').innerHTML=Object.entries(BG).map(([n,v])=>`<span class="sw" title="${n}" data-v="${v}" style="background:${v}"></span>`).join('');
+$('bgChoices').onclick=e=>{if(e.target.dataset.v)setBg(e.target.dataset.v)};
+$('bgUrlBtn').onclick=()=>{const u=$('bgUrl').value.trim();if(/^https?:\/\//.test(u))setBg(u)};
+$('bgFile').onchange=e=>{const f=e.target.files[0];if(!f)return;const img=new Image();img.onload=()=>{const s=Math.min(1,1920/Math.max(img.width,img.height)),c=document.createElement('canvas');
+ c.width=img.width*s;c.height=img.height*s;c.getContext('2d').drawImage(img,0,0,c.width,c.height);setBg(c.toDataURL('image/jpeg',.8));URL.revokeObjectURL(img.src)};img.src=URL.createObjectURL(f)};
+setBg(localStorage.getItem('bg')||BG['Warm dark'],false);
+place();addEventListener('resize',()=>DATA&&renderCal());
 tick();setInterval(tick,1000);setInterval(()=>{if(DATA){renderWeek();renderUp()}},30000);
 load();setInterval(load,10*60000);weather();setInterval(weather,30*60000);wake();
 let lastDay=ymd(new Date());setInterval(()=>{const d=ymd(new Date());if(d!==lastDay){lastDay=d;location.reload()}},60000);
