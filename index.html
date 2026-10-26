@@ -102,7 +102,7 @@ function renderWeek(){const now=new Date();let h='';
  $('tasks').innerHTML=DATA.tasks.length?DATA.tasks.map(t=>`<div class="item"><span style="margin-right:8px">☐</span><div>${esc(t.t)}${t.sec?`<span class="tm">${esc(t.sec)}</span>`:''}</div></div>`).join(''):'<div class="item" style="color:var(--dim)">Nothing open</div>'}
 function renderUp(){const now=new Date();const up=DATA.events.filter(e=>evEnd(e)>now);
  const nx=up.find(e=>!e.all)||up[0];
- if(nx){const ms=evStart(nx)-now;$('nextTitle').innerHTML=`<span class="dot c-${nx.c}" style="width:22px;height:22px"></span>${esc(nx.t)}`;
+ if(nx){const ms=evStart(nx)-now;$('nextTitle').innerHTML=`<span class="dot c-${nx.c}" style="width:1.4rem;height:1.4rem"></span>${esc(nx.t)}`;
   $('nextWhen').textContent=`${fmt(evStart(nx),{weekday:'long',month:'short',day:'numeric'})} · ${when(nx)}`;
   $('nextCd').textContent=ms<=0?'Happening now':cd(ms);$('nextB').innerHTML=ms>0?badges(ms):''}
  else{$('nextTitle').textContent='Nothing coming up';$('nextWhen').textContent=$('nextCd').textContent=$('nextB').innerHTML=''}
