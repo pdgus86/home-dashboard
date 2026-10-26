@@ -1,0 +1,126 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">
+<meta name="mobile-web-app-capable" content="yes"><title>Paul's Dashboard</title>
+<style>
+:root{--bg:#1f1a16;--panel:#2b241e;--line:#463a30;--text:#fbf3e6;--dim:#cbb9a3;--accent:#f2b76b;
+--yellow:#f6d55c;--orange:#ff9a3c;--red:#ff5a4e;--purple:#c79bf2;--blue:#8cc4ff}
+*{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
+font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden}
+body.night{filter:brightness(.45) sepia(.3)}
+#app{display:grid;grid-template-columns:47fr 23fr 30fr;gap:12px;height:100vh;padding:12px}
+.panel{background:var(--panel);border:2px solid var(--line);border-radius:16px;padding:12px 14px;overflow:hidden;display:flex;flex-direction:column;min-height:0}
+h2{margin:0 0 8px;font-size:22px;color:var(--accent);letter-spacing:.5px}
+/* calendar */
+#calHead{display:flex;align-items:center;justify-content:space-between}
+#calHead h2{font-size:30px;margin:0}
+#calHead button{font-size:26px;background:var(--line);color:var(--text);border:0;border-radius:10px;padding:2px 16px;margin-left:6px}
+#grid{flex:1;display:grid;grid-template-columns:repeat(7,1fr);grid-auto-rows:1fr;gap:4px;margin-top:8px;min-height:0}
+.dow{font-size:18px;color:var(--dim);text-align:center;font-weight:700}
+.day{background:#241e19;border-radius:8px;padding:3px 4px;overflow:hidden;min-height:0}
+.day.other{opacity:.35}.day.today{outline:3px solid var(--accent)}
+.dnum{font-size:19px;font-weight:800}
+.chip{font-size:14px;line-height:1.2;border-radius:5px;padding:1px 4px;margin-top:2px;color:#1a1410;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.more{font-size:13px;color:var(--dim)}
+.c-yellow{background:var(--yellow)}.c-orange{background:var(--orange)}.c-red{background:var(--red)}.c-purple{background:var(--purple)}.c-blue{background:var(--blue)}
+.dot{display:inline-block;width:16px;height:16px;border-radius:50%;margin-right:8px;vertical-align:middle;flex:none}
+/* lists */
+.list{overflow:auto;flex:1;min-height:0}
+.dayhdr{font-size:19px;font-weight:800;color:var(--accent);margin:10px 0 2px}
+.item{display:flex;align-items:flex-start;font-size:19px;padding:4px 0;border-bottom:1px solid var(--line)}
+.item .tm{color:var(--dim);font-size:17px;display:block}
+.past{opacity:.45}
+/* right */
+#right{display:grid;grid-template-rows:auto auto 1fr;gap:12px;min-height:0}
+#clock{font-size:76px;font-weight:800;line-height:1;letter-spacing:1px}
+#date{font-size:26px;color:var(--dim);margin-top:4px}
+#wx{display:flex;align-items:center;gap:14px;margin-top:10px;font-size:22px}
+#wxT{font-size:44px;font-weight:800}
+#next{border-color:var(--accent)}
+#nextTitle{font-size:30px;font-weight:800;line-height:1.15}
+#nextWhen{font-size:22px;color:var(--dim);margin-top:4px}
+#nextCd{font-size:38px;font-weight:800;color:var(--accent);margin-top:4px}
+.badge{display:inline-block;font-size:15px;font-weight:800;padding:2px 8px;border-radius:999px;margin:4px 4px 0 0;border:2px solid var(--line);color:var(--dim)}
+.badge.on{background:var(--accent);color:#1a1410;border-color:var(--accent)}
+.cd{font-weight:800;color:var(--accent);font-size:18px}
+#foot{font-size:13px;color:var(--dim);margin-top:6px}
+#msg{position:fixed;inset:0;display:none;align-items:center;justify-content:center;font-size:28px;text-align:center;padding:40px;background:var(--bg)}
+</style></head><body>
+<div id="app">
+ <section class="panel"><div id="calHead"><h2 id="monthName"></h2><div><button id="prev">‹</button><button id="todayBtn" style="font-size:20px">Today</button><button id="nextBtn">›</button></div></div><div id="grid"></div></section>
+ <section class="panel"><h2>This week</h2><div class="list" id="week"></div><h2 style="margin-top:10px">Tasks and reminders</h2><div class="list" id="tasks" style="flex:0 0 auto;max-height:32%"></div></section>
+ <div id="right">
+  <section class="panel"><div id="clock"></div><div id="date"></div><div id="wx"><span id="wxI" style="font-size:44px"></span><span id="wxT"></span><span id="wxD"></span></div></section>
+  <section class="panel" id="next"><h2>Next up</h2><div id="nextTitle"></div><div id="nextWhen"></div><div id="nextCd"></div><div id="nextB"></div></section>
+  <section class="panel"><h2>Coming up</h2><div class="list" id="up"></div><div id="foot"></div></section>
+ </div>
+</div><div id="msg"></div>
+<script>
+const TZ='America/Denver';let DATA=null,viewMonth=null;
+const $=id=>document.getElementById(id);
+const fmt=(d,o)=>new Intl.DateTimeFormat('en-US',{timeZone:TZ,...o}).format(d);
+const ymd=d=>fmt(d,{year:'numeric',month:'2-digit',day:'2-digit'}).replace(/(\d+)\/(\d+)\/(\d+)/,'$3-$1-$2');
+const tm=d=>fmt(d,{hour:'numeric',minute:'2-digit'});
+const esc=s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function evStart(e){return e.all?new Date(e.s+'T00:00:00'):new Date(e.s)}
+function evEnd(e){return e.all?new Date(e.e+'T00:00:00'):new Date(e.e)}
+function evDay(e){return e.all?e.s:ymd(new Date(e.s))}
+function when(e){return e.all?'All day':tm(evStart(e))}
+function cd(ms){if(ms<=0)return'now';const m=Math.round(ms/6e4),h=Math.floor(m/60),d=Math.floor(h/24);
+ if(d>=2)return`in ${d} days`;if(h>=24)return`in 1 day ${h-24} hr`;if(h>=1)return`in ${h} hr ${m%60} min`;return`in ${m} min`}
+const REM=[[30,'30 min'],[60,'1 hr'],[120,'2 hr'],[1440,'1 day'],[2880,'2 days']];
+function badges(ms){const m=ms/6e4;const active=REM.find(r=>m<=r[0]);return REM.map(r=>`<span class="badge${active&&active[0]===r[0]?' on':''}">${r[1]}</span>`).join('')}
+async function load(){
+ let k=location.hash.slice(1);if(k)localStorage.setItem('k',k);else k=localStorage.getItem('k');
+ if(!k){$('msg').style.display='flex';$('msg').textContent='Please open the full dashboard link (it includes the key after the #).';return}
+ try{const r=await fetch('data.enc.json?'+Date.now(),{cache:'no-store'});const j=await r.json();
+  const b=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+  const key=await crypto.subtle.importKey('raw',b(k.replace(/-/g,'+').replace(/_/g,'/')),'AES-GCM',false,['decrypt']);
+  const pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:b(j.iv)},key,b(j.ct));
+  DATA=JSON.parse(new TextDecoder().decode(pt));$('msg').style.display='none';render();
+ }catch(e){if(!DATA){$('msg').style.display='flex';$('msg').textContent='Could not load calendar yet. Will retry.'}}
+}
+function renderCal(){const now=new Date();if(!viewMonth){const [y,m]=ymd(now).split('-');viewMonth={y:+y,m:+m}}
+ const {y,m}=viewMonth;$('monthName').textContent=new Date(y,m-1,1).toLocaleString('en-US',{month:'long',year:'numeric'});
+ const first=new Date(y,m-1,1),start=new Date(first);start.setDate(1-first.getDay());
+ const byDay={};for(const e of DATA.events)(byDay[evDay(e)]??=[]).push(e);
+ const today=ymd(now);let h=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=>`<div class="dow">${d}</div>`).join('');
+ const weeks=Math.ceil((first.getDay()+new Date(y,m,0).getDate())/7);
+ for(let i=0;i<weeks*7;i++){const d=new Date(start);d.setDate(start.getDate()+i);
+  const k=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const ev=byDay[k]||[];const max=weeks>5?2:3;
+  h+=`<div class="day${d.getMonth()!==m-1?' other':''}${k===today?' today':''}"><div class="dnum">${d.getDate()}</div>`+
+   ev.slice(0,max).map(e=>`<div class="chip c-${e.c}">${e.all?'':tm(evStart(e)).replace(':00','').replace(' ','').toLowerCase()+' '}${esc(e.t)}</div>`).join('')+
+   (ev.length>max?`<div class="more">+${ev.length-max} more</div>`:'')+'</div>'}
+ $('grid').style.gridTemplateRows=`auto repeat(${weeks},1fr)`;$('grid').innerHTML=h}
+function renderWeek(){const now=new Date();let h='';
+ for(let i=0;i<7;i++){const d=new Date(now.getTime()+i*864e5),k=ymd(d);
+  const ev=DATA.events.filter(e=>evDay(e)===k);
+  h+=`<div class="dayhdr">${i===0?'Today':i===1?'Tomorrow':fmt(d,{weekday:'long'})} · ${fmt(d,{month:'short',day:'numeric'})}</div>`;
+  h+=ev.length?ev.map(e=>`<div class="item${evEnd(e)<now?' past':''}"><span class="dot c-${e.c}"></span><div>${esc(e.t)}<span class="tm">${when(e)}</span></div></div>`).join(''):'<div class="item" style="color:var(--dim)">Nothing scheduled</div>'}
+ $('week').innerHTML=h;
+ $('tasks').innerHTML=DATA.tasks.length?DATA.tasks.map(t=>`<div class="item"><span style="margin-right:8px">☐</span><div>${esc(t.t)}${t.sec?`<span class="tm">${esc(t.sec)}</span>`:''}</div></div>`).join(''):'<div class="item" style="color:var(--dim)">Nothing open</div>'}
+function renderUp(){const now=new Date();const up=DATA.events.filter(e=>evEnd(e)>now);
+ const nx=up.find(e=>!e.all)||up[0];
+ if(nx){const ms=evStart(nx)-now;$('nextTitle').innerHTML=`<span class="dot c-${nx.c}" style="width:22px;height:22px"></span>${esc(nx.t)}`;
+  $('nextWhen').textContent=`${fmt(evStart(nx),{weekday:'long',month:'short',day:'numeric'})} · ${when(nx)}`;
+  $('nextCd').textContent=ms<=0?'Happening now':cd(ms);$('nextB').innerHTML=ms>0?badges(ms):''}
+ else{$('nextTitle').textContent='Nothing coming up';$('nextWhen').textContent=$('nextCd').textContent=$('nextB').innerHTML=''}
+ $('up').innerHTML=up.filter(e=>e!==nx).slice(0,8).map(e=>{const ms=evStart(e)-now;
+  return`<div class="item"><span class="dot c-${e.c}"></span><div>${esc(e.t)}<span class="tm">${fmt(evStart(e),{weekday:'short',month:'short',day:'numeric'})} · ${when(e)} · <span class="cd">${ms<=0?'now':cd(ms)}</span></span>${ms>0&&ms<=2880*6e4?badges(ms):''}</div></div>`}).join('');
+ $('foot').textContent='Calendar updated '+fmt(new Date(DATA.updated),{weekday:'short',hour:'numeric',minute:'2-digit'})}
+function render(){if(!DATA)return;renderCal();renderWeek();renderUp()}
+function tick(){const n=new Date();$('clock').textContent=tm(n);$('date').textContent=fmt(n,{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+ const h=+fmt(n,{hour:'numeric',hour12:false})%24;document.body.classList.toggle('night',h>=22||h<6)}
+const WX={0:['☀️','Clear'],1:['🌤️','Mostly clear'],2:['⛅','Partly cloudy'],3:['☁️','Cloudy'],45:['🌫️','Fog'],48:['🌫️','Fog'],51:['🌦️','Drizzle'],53:['🌦️','Drizzle'],55:['🌦️','Drizzle'],61:['🌧️','Light rain'],63:['🌧️','Rain'],65:['🌧️','Heavy rain'],66:['🌧️','Freezing rain'],67:['🌧️','Freezing rain'],71:['🌨️','Light snow'],73:['🌨️','Snow'],75:['❄️','Heavy snow'],77:['🌨️','Snow'],80:['🌦️','Showers'],81:['🌧️','Showers'],82:['🌧️','Heavy showers'],85:['🌨️','Snow showers'],86:['❄️','Snow showers'],95:['⛈️','Thunderstorm'],96:['⛈️','Thunderstorm'],99:['⛈️','Thunderstorm']};
+async function weather(){try{const r=await fetch('https://api.open-meteo.com/v1/forecast?latitude=48.3883&longitude=-115.5561&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min&temperature_unit=fahrenheit&timezone=America%2FDenver&forecast_days=1');
+ const j=await r.json();const w=WX[j.current.weather_code]||['🌡️',''];$('wxI').textContent=w[0];$('wxT').textContent=Math.round(j.current.temperature_2m)+'°F';
+ $('wxD').innerHTML=`${w[1]}<br><span style="color:var(--dim)">Libby · High ${Math.round(j.daily.temperature_2m_max[0])}° Low ${Math.round(j.daily.temperature_2m_min[0])}°</span>`}catch(e){}}
+let lock=null;async function wake(){try{if('wakeLock' in navigator&&document.visibilityState==='visible'&&!lock){lock=await navigator.wakeLock.request('screen');lock.addEventListener('release',()=>lock=null)}}catch(e){}}
+document.addEventListener('visibilitychange',wake);document.addEventListener('click',wake);
+$('prev').onclick=()=>{viewMonth.m--;if(viewMonth.m<1){viewMonth.m=12;viewMonth.y--}renderCal()};
+$('nextBtn').onclick=()=>{viewMonth.m++;if(viewMonth.m>12){viewMonth.m=1;viewMonth.y++}renderCal()};
+$('todayBtn').onclick=()=>{viewMonth=null;renderCal()};
+tick();setInterval(tick,1000);setInterval(()=>{if(DATA){renderWeek();renderUp()}},30000);
+load();setInterval(load,10*60000);weather();setInterval(weather,30*60000);wake();
+let lastDay=ymd(new Date());setInterval(()=>{const d=ymd(new Date());if(d!==lastDay){lastDay=d;location.reload()}},60000);
+</script></body></html>
