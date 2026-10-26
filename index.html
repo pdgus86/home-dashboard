@@ -59,7 +59,7 @@ h2{margin:0 0 0.5rem;font-size:1.38rem;color:var(--accent);letter-spacing:.0.312
 .badge.on{background:var(--accent);color:#1a1410;border-color:var(--accent)}
 .cd{font-weight:800;color:var(--accent);font-size:1.12rem}
 #foot{font-size:0.812rem;color:var(--dim);margin-top:0.375rem}
-#msg{position:fixed;inset:0;display:none;align-items:center;justify-content:center;font-size:1.75rem;text-align:center;padding:2.5rem;background:var(--bg)}
+#msg{position:fixed;left:50%;top:1rem;transform:translateX(-50%);display:none;z-index:9;width:min(94vw,44rem);font-size:1.4rem;line-height:1.5;text-align:center;padding:1.2rem;background:#2b241e;border:.2rem solid var(--accent);border-radius:1rem;box-shadow:0 .5rem 2rem #000a}#msg input{width:100%;font-size:1.3rem;padding:.6rem;margin:.6rem 0;border-radius:.5rem;border:0}
 </style></head><body>
 <div id="app">
  <section class="panel tile" data-t="calendar" data-name="Calendar"><div id="calHead"><h2 id="monthName"></h2><div><button id="prev">‹</button><button id="todayBtn" style="font-size:1.25rem">Today</button><button id="nextBtn">›</button></div></div><div id="grid"></div></section>
@@ -73,9 +73,10 @@ h2{margin:0 0 0.5rem;font-size:1.38rem;color:var(--accent);letter-spacing:.0.312
 <div id="editPanel"><div class="row"><b>Edit layout</b> <span class="hint">Drag a tile to move it. Drag the ◢ corner to resize.</span></div>
  <div class="row"><b>Hidden tiles:</b> <span id="hiddenList"></span></div>
  <div class="row"><b>Background:</b> <span id="bgChoices"></span></div>
- <div class="row"><input id="bgUrl" placeholder="Paste an image link"><button id="bgUrlBtn">Use link</button><label class="filebtn">Pick a photo<input type="file" id="bgFile" accept="image/*" hidden></label></div>
+ <div class="row"><input id="bgUrl" placeholder="Paste an image link"><button id="bgUrlBtn">Use link</button><button id="bgPick">Pick a photo</button><input type="file" id="bgFile" accept="image/*" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0"></div>
  <div class="row"><button id="resetBtn">↺ Reset layout</button><button id="doneBtn" class="primary">✓ Done</button></div></div>
 <div id="msg"></div>
+<script src="nacl.min.js"></script>
 <script>
 const TZ='America/Denver';let DATA=null,viewMonth=null;
 const $=id=>document.getElementById(id);
@@ -91,20 +92,26 @@ function cd(ms){if(ms<=0)return'now';const m=Math.round(ms/6e4),h=Math.floor(m/6
  if(d>=2)return`in ${d} days`;if(h>=24)return`in 1 day ${h-24} hr`;if(h>=1)return`in ${h} hr ${m%60} min`;return`in ${m} min`}
 const REM=[[30,'30 min'],[60,'1 hr'],[120,'2 hr'],[1440,'1 day'],[2880,'2 days']];
 function badges(ms){const m=ms/6e4;const active=REM.find(r=>m<=r[0]);return REM.map(r=>`<span class="badge${active&&active[0]===r[0]?' on':''}">${r[1]}</span>`).join('')}
-async function load(){
- let k=location.hash.slice(1);if(k)localStorage.setItem('k',k);else k=localStorage.getItem('k');
- if(!k){$('msg').style.display='flex';$('msg').textContent='Please open the full dashboard link (it includes the key after the #).';return}
- try{const r=await fetch('data.enc.json?'+Date.now(),{cache:'no-store'});const j=await r.json();
-  const b=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
-  const key=await crypto.subtle.importKey('raw',b(k.replace(/-/g,'+').replace(/_/g,'/')),'AES-GCM',false,['decrypt']);
-  const pt=await crypto.subtle.decrypt({name:'AES-GCM',iv:b(j.iv)},key,b(j.ct));
-  DATA=JSON.parse(new TextDecoder().decode(pt));$('msg').style.display='none';render();
- }catch(e){if(!DATA){$('msg').style.display='flex';$('msg').textContent='Could not load calendar yet. Will retry.'}}
-}
+function findKey(t){t=String(t||'');try{t=decodeURIComponent(t)}catch(e){}t=t.replace(/%23/gi,'#');
+ const m=t.match(/#([A-Za-z0-9_\-+\/]{43})/)||t.match(/^\s*([A-Za-z0-9_\-+\/]{43})=?\s*$/);return m?m[1]:null}
+function b64(s){s=s.replace(/-/g,'+').replace(/_/g,'/');while(s.length%4)s+='=';const r=atob(s),u=new Uint8Array(r.length);for(let i=0;i<r.length;i++)u[i]=r.charCodeAt(i);return u}
+function utf8(u){if(window.TextDecoder)return new TextDecoder().decode(u);let s='';for(let i=0;i<u.length;i++)s+=String.fromCharCode(u[i]);return decodeURIComponent(escape(s))}
+function showMsg(html){const m=$('msg');m.innerHTML=html;m.style.display=html?'block':'none'}
+function keyBox(why){showMsg(`<b>${why}</b><br>Paste the dashboard link (or just the key) here:<br><input id="keyIn" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Paste here"><button id="keyGo" class="primary">Open calendar</button><div id="keyErr" style="color:var(--red)"></div>`);
+ $('keyGo').onclick=()=>{const k=findKey($('keyIn').value);if(!k){$('keyErr').textContent='That doesn’t look like the dashboard link. Try pasting it again.';return}tryKey(k,true)}}
+let JBLOB=null;
+async function fetchData(){const r=await fetch('data.enc.json?'+Date.now(),{cache:'no-store'});if(!r.ok)throw new Error('net');JBLOB=await r.json();return JBLOB}
+function decrypt(k,j){const key=b64(k);if(key.length!==32)throw new Error('badkey');const pt=nacl.secretbox.open(b64(j.ct),b64(j.n),key);if(!pt)throw new Error('badkey');return JSON.parse(utf8(pt))}
+async function tryKey(k,fromBox){let j;try{j=await fetchData()}catch(e){showMsg(DATA?'':'Can’t reach the internet right now. Will try again in a few minutes.');return}
+ try{DATA=decrypt(k,j);try{localStorage.setItem('k',k)}catch(e){}showMsg('');render();if(location.hash)history.replaceState(null,'',location.pathname)}
+ catch(e){if(fromBox)$('keyErr').textContent='That key didn’t work. Try pasting the whole link again.';else{try{localStorage.removeItem('k')}catch(e2){}keyBox('The calendar key is missing or incomplete.')}}}
+async function load(){if(DATA&&JBLOB&&!document.getElementById('keyIn')){const k=localStorage.getItem('k');if(k)return tryKey(k)}
+ if(document.getElementById('keyIn'))return;
+ const k=findKey(location.href)||findKey('#'+(localStorage.getItem('k')||''));if(!k)return keyBox('Calendar key needed.');tryKey(k)}
 function renderCal(){const now=new Date();if(!viewMonth){const [y,m]=ymd(now).split('-');viewMonth={y:+y,m:+m}}
  const {y,m}=viewMonth;$('monthName').textContent=new Date(y,m-1,1).toLocaleString('en-US',{month:'long',year:'numeric'});
  const first=new Date(y,m-1,1),start=new Date(first);start.setDate(1-first.getDay());
- const byDay={};for(const e of DATA.events)(byDay[evDay(e)]??=[]).push(e);
+ const byDay={};for(const e of DATA.events)(byDay[evDay(e)]=byDay[evDay(e)]||[]).push(e);
  const today=ymd(now);let h=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d=>`<div class="dow">${d}</div>`).join('');
  const weeks=Math.ceil((first.getDay()+new Date(y,m,0).getDate())/7);
  for(let i=0;i<weeks*7;i++){const d=new Date(start);d.setDate(start.getDate()+i);
@@ -130,7 +137,8 @@ function renderUp(){const now=new Date();const up=DATA.events.filter(e=>evEnd(e)
  $('up').innerHTML=up.filter(e=>e!==nx).slice(0,8).map(e=>{const ms=evStart(e)-now;
   return`<div class="item"><span class="dot c-${e.c}"></span><div>${esc(e.t)}<span class="tm">${fmt(evStart(e),{weekday:'short',month:'short',day:'numeric'})} · ${when(e)} · <span class="cd">${ms<=0?'now':cd(ms)}</span></span>${ms>0&&ms<=2880*6e4?badges(ms):''}</div></div>`}).join('');
  $('foot').textContent='Calendar updated '+fmt(new Date(DATA.updated),{weekday:'short',hour:'numeric',minute:'2-digit'})}
-function render(){if(!DATA)return;renderCal();renderWeek();renderUp()}
+function safe(f){try{f()}catch(e){console.error(e)}}
+function render(){if(!DATA)return;safe(renderCal);safe(renderWeek);safe(renderUp)}
 function tick(){const n=new Date();$('clock').textContent=tm(n);$('date').textContent=fmt(n,{weekday:'long',month:'long',day:'numeric',year:'numeric'});
  const h=+fmt(n,{hour:'numeric',hour12:false})%24;document.body.classList.toggle('night',h>=22||h<6)}
 const WX={0:['☀️','Clear'],1:['🌤️','Mostly clear'],2:['⛅','Partly cloudy'],3:['☁️','Cloudy'],45:['🌫️','Fog'],48:['🌫️','Fog'],51:['🌦️','Drizzle'],53:['🌦️','Drizzle'],55:['🌦️','Drizzle'],61:['🌧️','Light rain'],63:['🌧️','Rain'],65:['🌧️','Heavy rain'],66:['🌧️','Freezing rain'],67:['🌧️','Freezing rain'],71:['🌨️','Light snow'],73:['🌨️','Snow'],75:['❄️','Heavy snow'],77:['🌨️','Snow'],80:['🌦️','Showers'],81:['🌧️','Showers'],82:['🌧️','Heavy showers'],85:['🌨️','Snow showers'],86:['❄️','Snow showers'],95:['⛈️','Thunderstorm'],96:['⛈️','Thunderstorm'],99:['⛈️','Thunderstorm']};
@@ -145,11 +153,12 @@ $('todayBtn').onclick=()=>{viewMonth=null;renderCal()};
 $('fs').onclick=()=>{const d=document;if(d.fullscreenElement||d.webkitFullscreenElement){(d.exitFullscreen||d.webkitExitFullscreen).call(d)}else{const e=d.documentElement;(e.requestFullscreen||e.webkitRequestFullscreen).call(e)}};
 document.addEventListener('fullscreenchange',()=>{$('fs').textContent=document.fullscreenElement?'✕ Exit':'⛶ Full screen'});
 
+try{
 // ---- customizable layout (per device, localStorage) ----
 const G=24,GAP=.75;
 const DEF={calendar:{x:0,y:0,w:11,h:24},week:{x:11,y:0,w:6,h:24},clock:{x:17,y:0,w:7,h:5},weather:{x:17,y:5,w:7,h:4},next:{x:17,y:9,w:7,h:8},up:{x:17,y:17,w:7,h:7}};
-let L=JSON.parse(localStorage.getItem('layout')||'null')||structuredClone(DEF);
-for(const k in DEF)L[k]??=structuredClone(DEF[k]);
+let L=JSON.parse(localStorage.getItem('layout')||'null')||JSON.parse(JSON.stringify(DEF));
+for(const k in DEF)if(!L[k])L[k]=JSON.parse(JSON.stringify(DEF[k]));
 const tiles=[...document.querySelectorAll('.tile')];
 function place(){for(const t of tiles){const p=L[t.dataset.t];t.classList.toggle('hid',!!p.hidden);
  Object.assign(t.style,{left:`calc(${p.x/G*100}% + ${GAP/2}rem)`,top:`calc(${p.y/G*100}% + ${GAP/2}rem)`,width:`calc(${p.w/G*100}% - ${GAP}rem)`,height:`calc(${p.h/G*100}% - ${GAP}rem)`})}
@@ -168,7 +177,7 @@ for(const t of tiles){const h=document.createElement('button');h.className='ctl 
 $('hiddenList').onclick=e=>{const k=e.target.dataset.show;if(k){L[k].hidden=false;save();place()}};
 if(location.search.includes('edit'))document.body.classList.add('editing');
 $('editBtn').onclick=()=>document.body.classList.toggle('editing');$('doneBtn').onclick=()=>document.body.classList.remove('editing');
-$('resetBtn').onclick=()=>{L=structuredClone(DEF);save();place();if(DATA)renderCal()};
+$('resetBtn').onclick=()=>{L=JSON.parse(JSON.stringify(DEF));save();place();if(DATA)renderCal()};
 // backgrounds
 const BG={'Warm dark':'#1f1a16','Forest night':'linear-gradient(160deg,#0f2418,#1d3b2a 55%,#0b1510)','Mountain dusk':'linear-gradient(170deg,#2a2346,#5b3a55 50%,#c0714f)','Lake blue':'linear-gradient(160deg,#0c1d2e,#1c4060 60%,#0a1622)','Ember':'radial-gradient(circle at 30% 20%,#5a2e14,#1f1410 70%)','Slate':'linear-gradient(160deg,#22262b,#3a4048)'};
 function setBg(v,save1=true){document.body.style.background=v.startsWith('url(')||!v.includes('(')&&!v.startsWith('#')?v:v;
@@ -178,11 +187,13 @@ function setBg(v,save1=true){document.body.style.background=v.startsWith('url(')
 $('bgChoices').innerHTML=Object.entries(BG).map(([n,v])=>`<span class="sw" title="${n}" data-v="${v}" style="background:${v}"></span>`).join('');
 $('bgChoices').onclick=e=>{if(e.target.dataset.v)setBg(e.target.dataset.v)};
 $('bgUrlBtn').onclick=()=>{const u=$('bgUrl').value.trim();if(/^https?:\/\//.test(u))setBg(u)};
+$('bgPick').onclick=()=>$('bgFile').click();
 $('bgFile').onchange=e=>{const f=e.target.files[0];if(!f)return;const img=new Image();img.onload=()=>{const s=Math.min(1,1920/Math.max(img.width,img.height)),c=document.createElement('canvas');
  c.width=img.width*s;c.height=img.height*s;c.getContext('2d').drawImage(img,0,0,c.width,c.height);setBg(c.toDataURL('image/jpeg',.8));URL.revokeObjectURL(img.src)};img.src=URL.createObjectURL(f)};
 setBg(localStorage.getItem('bg')||BG['Warm dark'],false);
 place();addEventListener('resize',()=>DATA&&renderCal());
-tick();setInterval(tick,1000);setInterval(()=>{if(DATA){renderWeek();renderUp()}},30000);
+}catch(e){console.error("layout",e);document.querySelectorAll(".tile").forEach(t=>t.style.position="static")}
+tick();setInterval(tick,1000);setInterval(()=>{if(DATA){safe(renderWeek);safe(renderUp)}},30000);
 load();setInterval(load,10*60000);weather();setInterval(weather,30*60000);wake();
 let lastDay=ymd(new Date());setInterval(()=>{const d=ymd(new Date());if(d!==lastDay){lastDay=d;location.reload()}},60000);
 </script></body></html>
